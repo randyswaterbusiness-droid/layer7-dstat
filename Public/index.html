@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layer 7 Dstat - Supabase Edition</title>
+    <!-- Dependencies injected globally to prevent versioning bugs -->
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+    <style>
+        body { background: #0f0f13; color: #fff; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { width: 80%; max-width: 900px; background: #16161a; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border: 1px solid #24242b; }
+        h1 { margin-top: 0; color: #00ff66; text-shadow: 0 0 10px rgba(0,255,102,0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LAYER 7 DSTAT</h1>
+        <canvas id="dstatChart"></canvas>
+    </div>
+
+    <script>
+        // Setup empty chart parameters cleanly
+        const ctx = document.getElementById('dstatChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Requests Per Second (RPS)',
+                    data: [],
+                    borderColor: '#00ff66',
+                    backgroundColor: 'rgba(0, 255, 102, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { grid: { color: '#24242b' }, ticks: { color: '#888' } },
+                    y: { grid: { color: '#24242b' }, ticks: { color: '#888' }, beginAtZero: true }
+                }
+            }
+        });
+
+        // Vercel auto-injects these parameters on deployment if linked via Client configuration
+        // Grab your credentials from your Supabase dashboard and paste them below:
+        const SUPABASE_URL = "https://supabase.co"; 
+        const SUPABASE_ANON_KEY = "your-actual-supabase-anon-public-key";
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Active listener targeting table row update streams
+        supabaseClient
+          .channel('dstat-stream')
+          .on('postgres_changes', { 
+              event: 'UPDATE', 
+              schema: 'public', 
+              table: 'live_traffic',
+              filter: 'id=eq.1' 
+          }, (payload) => {
+              const liveRps = payload.new.requests_per_second;
+              const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              
+              chart.data.labels.push(currentTime);
+              chart.data.datasets[0].data.push(liveRps);
+
+              if (chart.data.labels.length > 20) {
+                  chart.data.labels.shift();
+                  chart.data.datasets[0].data.shift();
+              }
+              chart.update();
+          })
+          .subscribe();
+    </script>
+</body>
+</html>
